@@ -20,6 +20,7 @@ Cursor, or any other). `CLAUDE.md` and `GEMINI.md` only point here.
 | ↳ Narrator | tool run by the Director | `scripts/voice.py` | `voice/*.wav` |
 | ↳ Camera | tool run by the Director | `scripts/capture.py` | `capture/<scene>/` |
 | ↳ Editor | tool run by the Director | `scripts/build.py` | `renders/draft.mp4`, `final.mp4` |
+| ↳ Review page | tool run by the Producer | `scripts/review.py` | `review.json` (comments, approvals) |
 | ↳ Animator (optional) | `/hyperframes` skills | `animations/` | richer title/end cards |
 | **Reviewer** | Producer + the user | `pipeline/skills/draft-review` | feedback applied + remembered |
 
@@ -50,18 +51,21 @@ Sub-agents can't talk to the user — only the Producer asks questions and gets 
    prerequisites, glossary, stable selectors, risks (popups, slow pages, data that changes).
 2. **Write** (Writer) — from the analysis and the intake, write `story.md`: the tutorial as
    scenes, each with what's on screen and the exact narration lines. One narration line = one
-   on-screen action.
+   on-screen action, except routine forms: one line for the whole form.
 3. **GATE 1** (Producer) — show the user the story (title, scenes, narration, estimated length).
    Change it with the Writer until they say yes. Log the approval in `notes.md` → Approvals.
    **Nothing is filmed before this yes.**
 4. **Direct** (Director) — turn the approved story into `shotlist.json` (selectors, actions,
    zooms, callouts), then: `capture.py --check` (all selectors work) → `voice.py` → `capture.py`
    → `build.py --draft`. Look at frames of the draft before handing it back.
-5. **GATE 2** (Producer) — give the user `renders/draft.mp4` and `renders/storyboard.html` (video
-   + one row per step with its time, thumbnail and narration; click a row to jump there).
-   Route each piece of feedback: words/story → Writer; picture, timing, zoom, selectors →
-   Director; taste ("always…") → house style. Re-run only what changed (see "What to re-run").
-6. **Final** — only after the user approves the draft: `build.py --final`.
+5. **GATE 2** (Producer) — start `review.py <name>` (in the background) and send the user to the
+   review page: every part (title card, each scene, end card) has its own clip, a comment box and
+   **Approve**, and every step its own comment; it all saves to `projects/<name>/review.json`.
+   Read it with `review.py <name> --list`. Route each comment: words/story → Writer; picture,
+   timing, zoom, selectors → Director; taste ("always…") → house style. Re-run only what changed
+   (see "What to re-run"); `build.py` redraws only changed parts. Mark fixes with `--done`.
+6. **Final** — only after the user approves the draft (every part approved, confirmed in chat):
+   `build.py --final`.
 7. **Deliver** — give the path to `renders/final.mp4` and `renders/captions.srt` (for the upload),
    then ask once for feedback and record it (`pipeline/skills/draft-review`).
 
@@ -77,7 +81,9 @@ py scripts/capture.py <name> --check                   # Director: test every st
 py scripts/voice.py <name> [--engine kokoro|edge|recorded|silent]   # Narrator
 py scripts/capture.py <name> [--scene s02] [--headed]  # Camera (after voice.py)
 py scripts/build.py <name> --draft                     # Editor: 720p review copy + storyboard.html
-py scripts/build.py <name> --final [--music FILE] [--captions]
+py scripts/build.py <name> --final [--music FILE] [--captions]   # (only changed parts redrawn; --fresh: all)
+py scripts/review.py <name>                            # review page: comment + approve per part
+py scripts/review.py <name> --list | --done s02.1="reply"   # read the comments / mark one fixed
 py scripts/install_agent.py [--agent claude|gemini|codex|all]   # (re)install skills + sub-agents
 ```
 
@@ -92,7 +98,8 @@ Every script has `--help`. `projects/<name>` can be given as just `<name>`.
 | zoom, callout, highlight, chapter, cards, music, captions, style.json | `build.py` only |
 
 Timing comes from the narration: every step lasts as long as its line, so after a voice change,
-re-film the scenes that contain it.
+re-film the scenes that contain it. `build.py` always works out by itself which parts changed;
+a change to style.json or build.py itself redraws them all.
 
 ## Project layout
 
@@ -108,13 +115,15 @@ library/music, library/sfx, CREDITS.md   free audio, every file logged with its 
 projects/<name>/
   project.json  notes.md  .env           id + brief, intake, approvals; demo logins (never committed)
   FEEDBACK.md                             this tutorial's own feedback log (local)
+  review.json                             the user's draft comments + approvals per part (local)
   analysis/     analysis.md, pages.json, pages/*.png       (System Analyst)
   story.md                                                  (Writer, approved at GATE 1)
   shotlist.json                                             (Director)
   voice/        <key>.wav, voice.json                       (Narrator)
   capture/<scene>/  events.json, frames/ or shots/          (Camera)
   assets/       anything extra: HyperFrames cards, logos
-  renders/      draft.mp4, final.mp4, storyboard.html, captions.srt, timeline.json
+  renders/      draft.mp4, final.mp4, storyboard.html, captions.srt, timeline.json,
+                scenes/<part>.mp4 (per-part review clips), .cache/parts/ (reused render parts)
 ```
 
 ## Rules

@@ -7,9 +7,12 @@ description: Review-and-learn skill for Tutorial Studio. Use whenever the user r
 
 ## Find what they mean
 
-Comments come as times ("at 0:42"), step keys ("s02.1"), or descriptions ("the zoom on the price").
-Map them with `renders/timeline.json` (each step's start time) and `storyboard.html`.
-If you can't tell which moment they mean, ask with the two nearest candidates.
+Most comments arrive through the review page, already tied to a part (`s02`), a step (`s02.1`)
+or the whole video (`_general`): `py scripts/review.py <name> --list` prints each open one with
+its time and narration, plus which parts are approved. Comments in chat come as times ("at
+0:42"), step keys or descriptions ("the zoom on the price"): map them with
+`renders/timeline.json`. If you can't tell which moment they mean, ask with the two nearest
+candidates.
 
 ## Route it
 
@@ -23,8 +26,11 @@ If you can't tell which moment they mean, ask with the two nearest candidates.
 | zoom, highlight, callout, chapter label | Director | step fields or style `camera` / `highlight` → `build.py` only |
 | cards, colours, fonts, captions look, music level | Director | `style.json` brand/cards/captions/audio → `build.py` only |
 
-Re-run only what's needed (AGENTS.md → "What to re-run") and render a new draft. Tell the user
-what changed in one or two lines, with the new time if things moved.
+Re-run only what's needed (AGENTS.md → "What to re-run") and render a new draft: `build.py`
+redraws only the parts that changed (it prints them under "redrawn"). Then mark each handled
+comment `py scripts/review.py <name> --done s02.1="zoom removed"` (short reply, the user's
+language) and tell the user in one or two lines which parts to look at again. A comment you
+didn't act on (a question, or one you need to ask about) stays open: answer it in chat.
 
 ## Remember it
 

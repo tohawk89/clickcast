@@ -50,7 +50,12 @@ py scripts/capture.py <name>             # films; each step lasts as long as its
 
 ## 3. Draft
 
-`py scripts/build.py <name> --draft` (720p, "DRAFT" badge, ~real time). Then **look at it**:
+`py scripts/build.py <name> --draft` (720p, "DRAFT" badge, ~real time the first time). It renders
+in parts — title card, each scene, end card — cached in `renders/.cache/parts/`; later runs redraw
+only parts whose content changed (it prints which), so after re-filming one scene the draft takes
+seconds, not minutes. It also writes one clip per part in `renders/scenes/` for the storyboard's
+per-part review (`--fresh` redraws everything). Then **look at it** — after a re-render, only the
+redrawn parts:
 extract frames at each zoom, callout, chapter label and card
 (`ffmpeg -ss <t> -i renders/draft.mp4 -frames:v 1 -vf scale=960:-1 check.png`; step times are in
 `renders/timeline.json`) and check:
@@ -68,6 +73,8 @@ what you checked, any compromise (e.g. "s03 is screenshots because the chart ani
 
 Use the "What to re-run" table in `AGENTS.md`. Re-film only affected scenes with
 `capture.py --scene <id>` (earlier scenes are replayed unfilmed to reach the right state).
+The user's comments: `py scripts/review.py <name> --list`. After the new draft, mark what you fixed
+with `--done <key>="short reply"` and report to the Producer which parts were redrawn.
 
 ## 5. Final (only after the Producer confirms the user approved the draft)
 

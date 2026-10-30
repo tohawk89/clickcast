@@ -3,7 +3,7 @@
 Usage:
   .venv\\Scripts\\python.exe scripts\\build.py <project> --draft     # fast 720p review copy
   .venv\\Scripts\\python.exe scripts\\build.py <project> --final     # 1080p, after the user OKs the draft
-      [--music library/music/x.mp3] [--captions | --no-captions]
+      [--music library/music/x.mp3] [--captions | --no-captions] [--fresh]
 
 Draft and final share one timeline, so feedback on the draft ("at 0:42 ...") holds for the final.
 Picture: title card -> scenes -> end card, cross-faded. In every scene the camera eases in on the
@@ -21,10 +21,17 @@ bottom tab bar visible); cards.overlay_scale (default 1) enlarges callouts and c
 
 Writes renders/draft.mp4 or final.mp4, captions.srt (always: also for the upload), timeline.json
 (every step's time in the video) and storyboard.html (the review page: video + one row per step).
+
+The picture is rendered in parts (title card, each scene, end card, and the cross-fade into each)
+cached in renders/.cache/parts/, so a re-run only redraws the parts whose content changed — after
+re-filming s03, only s03 (and the fade into s04) is drawn again; --fresh redraws everything.
+A draft also writes one clip per scene, renders/scenes/<id>.mp4, for the storyboard's per-scene
+review (comment and approve each scene: scripts/review.py).
 """
 
 import argparse
 import bisect
+import hashlib
 import html
 import json
 import math
@@ -166,6 +173,19 @@ class Clip:
         if len(b) == self.n:
             self.last = Image.frombytes("RGB", self.size, b)
         return self.last
+
+    def close(self):
+        self.p.kill()
+        self.p.wait()
+
+
+def still(path: Path, t: float, size: tuple[int, int]) -> Image.Image:
+    """One frame of a video file at time t, scaled like Clip."""
+    w, h = size
+    r = subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", f"{max(0.0, t):.3f}", "-i", str(path), "-frames:v", "1",
+                        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:-1:-1",
+                        "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True)
+    return Image.frombytes("RGB", size, r.stdout) if len(r.stdout) == w * h * 3 else Image.new("RGB", size)
 
 
 class Camera:
@@ -312,7 +332,8 @@ class Painter:
                 if s["do"] == "type" and st.get("text") and not st.get("secret"):
                     typed = len(str(st["text"])) * self.h["capture"]["type_delay_ms"] / 1000
                     a1 = min(a1, s["t_action"] + typed + 0.5)
-            a0 = max(a0, s["t_start"] + fin)
+            # Never before the page finished scrolling to the target (the box is where it ends up).
+            a0 = max(a0, s.get("t_ready", s["t_start"]) + fin)
             a1 = max(a1, a0)
             if not (a0 - fin <= t <= a1 + fout):
                 continue
@@ -490,6 +511,99 @@ class Painter:
         return img
 
 
+# ----------------------------------------------------------------------------- parts (incremental render)
+
+def sha(data) -> str:
+    if not isinstance(data, (bytes, str)):
+        data = json.dumps(data, sort_keys=True, default=str)
+    return hashlib.sha1(data.encode() if isinstance(data, str) else data).hexdigest()[:12]
+
+
+def seg_key(seg: dict) -> str:
+    return seg["id"] if seg["kind"] == "scene" else ("intro" if seg["kind"] == "title" else "outro")
+
+
+def content_sig(seg: dict, shot: dict) -> str:
+    """Everything a segment's picture depends on (its place in the video excluded)."""
+    if seg["kind"] == "scene":
+        body = {k: v for k, v in seg.items() if k not in ("start", "dir")}
+        body["events"] = sha((seg["dir"] / "events.json").read_bytes())
+    else:
+        f = seg.get("file")
+        body = {"kind": seg["kind"], "dur": seg["dur"], "file": [str(f), f.stat().st_mtime] if f else None,
+                "text": ([shot.get(k) for k in ("title", "subtitle", "kicker")] if seg["kind"] == "title"
+                         else shot.get("outro"))}
+    return sha(body)
+
+
+class Renderer:
+    """Draws the video as parts: each segment, plus the cross-fade into it (its first XFADE seconds,
+    which also depend on the segment before). A part is redrawn only when its signature changes."""
+
+    def __init__(self, painter: Painter, house: dict, size, fps: int, draft: bool, enc: list, cache: Path,
+                 thumb_dir: Path):
+        self.painter, self.house, self.size, self.fps, self.draft, self.enc = painter, house, size, fps, draft, enc
+        self.dir, self.thumb_dir = cache, thumb_dir
+        cache.mkdir(parents=True, exist_ok=True)
+        self.manifest_file = cache / "manifest.json"
+        self.manifest = read_json(self.manifest_file) if self.manifest_file.exists() else {}
+
+    def frame(self, seg, lt, state):
+        if seg["kind"] == "scene":
+            if "cam" not in state:
+                state["cam"] = Camera(seg, self.house)
+            return self.painter.scene(seg, state["cam"], lt)[0]
+        if seg.get("file"):
+            return state["clip"].next()
+        return self.painter.card(seg["kind"], lt, seg["dur"])
+
+    def last_frame(self, seg, n):
+        lt = (n - 1) / self.fps
+        return still(seg["file"], lt, self.size) if seg.get("file") else self.frame(seg, lt, {})
+
+    def stale(self, part) -> bool:
+        return (self.manifest.get(part["name"]) != part["sig"] or not (self.dir / f"{part['name']}.mp4").exists()
+                or any(not (self.thumb_dir / f"{k}.jpg").exists() for k in part["thumbs"].values()))
+
+    def render(self, part, seg, seg_f0, blend):
+        W, H = self.size
+        out = self.dir / f"{part['name']}.mp4"
+        ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
+                               "-s", f"{W}x{H}", "-r", str(self.fps), "-i", "-", *self.enc, "-an", str(out)],
+                              stdin=subprocess.PIPE)
+        state = {}
+        if seg.get("file") and seg["kind"] != "scene":
+            state["clip"] = Clip(seg["file"], self.size, self.fps)
+            for _ in range(part["f0"] - seg_f0):
+                state["clip"].next()
+        for f in range(part["f0"], part["f1"]):
+            lt = (f - seg_f0) / self.fps
+            img = self.frame(seg, lt, state)
+            if blend is not None and lt < XFADE:
+                img = Image.blend(blend, img, ease(lt / XFADE))
+            if self.draft:
+                img = self.painter.watermark(img.copy())
+            if f in part["thumbs"]:
+                th = img.copy()
+                th.thumbnail((480, 270) if W >= H else (270, 480))
+                th.save(self.thumb_dir / f"{part['thumbs'][f]}.jpg", quality=80)
+            ff.stdin.write(img.tobytes())
+        if "clip" in state:
+            state["clip"].close()
+        ff.stdin.close()
+        if ff.wait():
+            raise SystemExit(f"!! ffmpeg failed on part {part['name']}")
+        self.manifest[part["name"]] = part["sig"]
+        write_json(self.manifest_file, self.manifest)
+
+
+def concat(files: list[Path], out: Path) -> None:
+    lst = out.with_suffix(".txt")
+    lst.write_text("".join(f"file '{f.resolve().as_posix()}'\n" for f in files), encoding="utf-8")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
+                    "-c", "copy", str(out)], check=True)
+
+
 # ----------------------------------------------------------------------------- sound
 
 def narration(proj: Path, clips, duration, out: Path) -> None:
@@ -573,43 +687,34 @@ def srt(clips, house, out: Path) -> None:
     out.write_text("\n".join(rows), encoding="utf-8")
 
 
-def storyboard(proj: Path, shot: dict, tl: dict, video: Path, thumbs: dict) -> Path:
-    rows = []
-    for seg in tl["segments"]:
-        if seg["kind"] != "scene":
-            label = "Title card" if seg["kind"] == "title" else "End card"
-            key = "intro" if seg["kind"] == "title" else "outro"
-            say = next((c["text"] for c in tl["clips"] if c["key"] == key), "")
-            rows.append(f'<tr data-t="{seg["start"]:.2f}"><td class="t">{fmt(seg["start"])}</td><td>'
-                        f'<img src="thumbs/{key}.jpg"></td><td><b>{label}</b></td><td>{html.escape(say)}</td></tr>')
-            continue
-        rows.append(f'<tr class="scene"><td colspan="4">Scene {seg["n"]} · <b>{html.escape(seg["id"])}</b> '
-                    f'{html.escape(seg["title"])} <span>({seg["mode"]}, {seg["dur"]:.1f}s)</span></td></tr>')
-        for s in seg["steps"]:
-            st = s["st"]
-            what = st.get("do", "none")
-            tgt = st.get("target") or st.get("url") or st.get("focus") or ""
-            extra = " · ".join(x for x in [f"zoom ×{s['zoom']:.1f}" if s["zoom"] else "",
-                                           f"callout “{st['callout']}”" if st.get("callout") else ""] if x)
-            t = seg["start"] + s["t_start"]
-            rows.append(f'<tr data-t="{t:.2f}"><td class="t">{fmt(t)}<br><small>{s["key"]}</small></td>'
-                        f'<td><img src="thumbs/{s["key"]}.jpg"></td>'
-                        f'<td><code>{html.escape(what)}</code> {html.escape(tgt)}<br><small>{html.escape(extra)}</small></td>'
-                        f'<td>{html.escape(st.get("say", ""))}</td></tr>')
-    page = f"""<!doctype html><html><head><meta charset="utf-8"><title>{html.escape(shot.get('title', 'Storyboard'))}</title>
-<style>body{{font:15px/1.45 system-ui,sans-serif;margin:0;background:#f4f4f8;color:#1b1640}}
-header{{position:sticky;top:0;background:#1b1640;color:#fff;padding:12px 16px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;z-index:2}}
-header video{{width:min(480px,100%);max-height:60vh;border-radius:8px;background:#000}} header div{{flex:1 1 240px}}
-@media (max-width:700px){{header{{position:static}} img{{max-width:140px}} td{{padding:6px}}}} h1{{font-size:20px;margin:0}} header p{{margin:4px 0 0;opacity:.75}}
-table{{border-collapse:collapse;width:100%;max-width:1200px;margin:16px auto;background:#fff}}
-td{{padding:8px 12px;border-bottom:1px solid #eee;vertical-align:top}} td.t{{white-space:nowrap;color:#5a46d6;font-weight:600}}
-tr[data-t]{{cursor:pointer}} tr[data-t]:hover{{background:#f0eeff}} tr.scene td{{background:#ece9ff;font-size:14px}}
-tr.scene span{{color:#666}} img{{max-width:240px;max-height:300px;border-radius:6px;display:block}} small{{color:#888}} code{{background:#eee;padding:1px 5px;border-radius:4px}}</style></head>
-<body><header><video src="{video.name}" controls></video><div><h1>{html.escape(shot.get('title', ''))}</h1>
-<p>{fmt(tl['duration'])} · click a row to jump there · give feedback by time or step key (e.g. “s02.1: say it slower”)</p></div></header>
-<table>{''.join(rows)}</table>
-<script>const v=document.querySelector('video');document.querySelectorAll('tr[data-t]').forEach(r=>r.onclick=()=>{{v.currentTime=+r.dataset.t+0.05;v.play()}});</script>
-</body></html>"""
+STORYBOARD = Path(__file__).with_name("storyboard.html")  # the review page template
+
+
+def storyboard(proj: Path, shot: dict, tl: dict, timeline: dict, video: Path) -> Path:
+    """The review page: one section per part (its own clip, a comment box, Approve) and its steps."""
+    says = {c["key"]: c["text"] for c in tl["clips"]}
+    segs = []
+    for seg, info in zip(tl["segments"], timeline["segments"]):
+        d = {k: info[k] for k in ("key", "kind", "sig", "changed", "clip", "start", "dur")}
+        d["start"], d["dur"] = round(d["start"], 2), round(d["dur"], 2)
+        if seg["kind"] == "scene":
+            d |= {"n": seg["n"], "title": seg["title"], "mode": seg["mode"], "steps": [{
+                "key": s["key"], "t": round(s["t_start"], 2), "say": s["st"].get("say", ""),
+                "do": s["st"].get("do", "none"),
+                "target": s["st"].get("target") or s["st"].get("url") or s["st"].get("focus") or "",
+                "extra": " · ".join(x for x in [f"zoom ×{s['zoom']:.1f}" if s["zoom"] else "",
+                                                f"callout “{s['st']['callout']}”" if s["st"].get("callout") else ""] if x)}
+                for s in seg["steps"]]}
+        else:
+            d["say"] = says.get(d["key"], "")
+        segs.append(d)
+    changed = {s["changed"] for s in segs}
+    data = {"project": read_json(proj / "project.json").get("id", proj.name), "segments": segs,
+            "last_change": timeline.get("last_change"), "first": len(changed) == 1}
+    page = (STORYBOARD.read_text(encoding="utf-8").replace("__TITLE__", html.escape(shot.get("title", "Storyboard")))
+            .replace("__DUR__", fmt(tl["duration"]))
+            .replace("__VIDEO__", f"{video.name}?v={sha([s['sig'] for s in segs])}")
+            .replace("__DATA__", json.dumps(data, ensure_ascii=False).replace("</", "<\\/")))
     out = video.parent / "storyboard.html"
     out.write_text(page, encoding="utf-8")
     return out
@@ -625,6 +730,7 @@ def main():
     g.add_argument("--final", action="store_true")
     ap.add_argument("--music", type=Path, help="background music (default: shotlist 'music')")
     ap.add_argument("--captions", action=argparse.BooleanOptionalAction, help="burn captions into the picture")
+    ap.add_argument("--fresh", action="store_true", help="redraw every part instead of reusing unchanged ones")
     a = ap.parse_args()
 
     proj = style.project_dir(a.project)
@@ -666,68 +772,101 @@ def main():
         vf = ["-vf", f"subtitles=f='{path}':force_style='{fs}'"]
     enc = ["-c:v", "libx264", "-preset", ex["draft_preset"] if a.draft else ex["preset"],
            "-crf", str(ex["draft_crf"] if a.draft else ex["crf"]), "-pix_fmt", "yuv420p"]
-    ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
-                           "-s", f"{W}x{H}", "-r", str(fps), "-i", "-", "-i", str(snd), *vf, *enc,
-                           "-c:a", "copy", "-map", "0:v", "-map", "1:a", "-shortest", "-movflags", "+faststart",
-                           str(out)], stdin=subprocess.PIPE)
     painter = Painter(house, (W, H), a.draft, shot)
-    want_thumbs = {}
-    for seg in tl["segments"]:
+    segs = tl["segments"]
+    # Frame ranges are fixed per segment, so a part can be reused when only earlier segments moved.
+    bounds = [(round(s["start"] * fps), round((s["start"] + s["dur"]) * fps)) for s in segs]
+    salt = [sha(Path(__file__).read_bytes()), house, [W, H], fps, a.draft, enc]
+    sigs = [content_sig(s, shot) for s in segs]
+    thumbs = {}
+    for seg in segs:
         if seg["kind"] == "scene":
             for s in seg["steps"]:
-                want_thumbs[s["key"]] = seg["start"] + min(s["t_end"] - 0.05, s["t_action"] + 0.5)
+                thumbs[round((seg["start"] + min(s["t_end"] - 0.05, s["t_action"] + 0.5)) * fps)] = s["key"]
         else:
-            want_thumbs["intro" if seg["kind"] == "title" else "outro"] = seg["start"] + min(seg["dur"] - 0.5, 1.4)
-    thumb_frames = {round(t * fps): k for k, t in want_thumbs.items()}
+            thumbs[round((seg["start"] + min(seg["dur"] - 0.5, 1.4)) * fps)] = seg_key(seg)
+    parts = []
+    for i, seg in enumerate(segs):
+        (f0, f1), key = bounds[i], seg_key(seg)
+        hn = min(round(XFADE * fps), f1 - f0) if i else 0
+        spans = [(f"{key}-in", f0, f0 + hn, sha([salt, sigs[i - 1], bounds[i - 1][1] - bounds[i - 1][0], sigs[i], f1 - f0]))]
+        spans = (spans if hn else []) + [(key, f0 + hn, f1, sha([salt, sigs[i], f1 - f0, hn]))]
+        for pname, p0, p1, sig in spans:
+            if p1 > p0:
+                parts.append({"name": pname, "seg": i, "f0": p0, "f1": p1, "sig": sig,
+                              "thumbs": {f: k for f, k in thumbs.items() if p0 <= f < p1}})
 
-    total = int(round(dur * fps))
-    started, last, prev_last = time.time(), None, None
-    seg_i, cams = 0, {}
-    segs = tl["segments"]
-    for f in range(total):
-        t = f / fps
-        while seg_i + 1 < len(segs) and t >= segs[seg_i + 1]["start"]:
-            prev_last = last
-            seg_i += 1
-        seg = segs[seg_i]
-        lt = t - seg["start"]
-        if seg["kind"] == "scene":
-            if seg_i not in cams:
-                cams[seg_i] = Camera(seg, house)
-            img, _ = painter.scene(seg, cams[seg_i], lt)
-        else:
-            if seg.get("file"):
-                if seg_i not in cams:
-                    cams[seg_i] = Clip(seg["file"], (W, H), fps)
-                img = cams[seg_i].next()
-            else:
-                img = painter.card(seg["kind"], lt, seg["dur"])
-        if prev_last is not None and seg_i > 0 and lt < XFADE:
-            img = Image.blend(prev_last, img, ease(lt / XFADE))
-        last = img
-        if a.draft:
-            img = painter.watermark(img.copy())
-        if f in thumb_frames:
-            th = img.copy()
-            th.thumbnail((480, 270) if W >= H else (270, 480))
-            th.save(rdir / "thumbs" / f"{thumb_frames[f]}.jpg", quality=80)
-        ff.stdin.write(img.tobytes())
-        if f % (fps * 5) == 0 and f:
-            el = time.time() - started
-            print(f"  {fmt(t)} / {fmt(dur)}  ({f / el:.0f} fps, ~{(total - f) / (f / el):.0f}s left)", file=sys.stderr)
-    ff.stdin.close()
-    if ff.wait():
-        raise SystemExit("!! ffmpeg failed")
+    rend = Renderer(painter, house, (W, H), fps, a.draft, enc, rdir / ".cache" / "parts" / name, rdir / "thumbs")
+    todo = [p for p in parts if a.fresh or rend.stale(p)]
+    print(f"Picture: {len(todo)} of {len(parts)} parts to draw ({', '.join(p['name'] for p in todo) or 'all cached'})")
+    started = time.time()
+    for p in todo:
+        seg = segs[p["seg"]]
+        t0 = time.time()
+        blend = rend.last_frame(segs[p["seg"] - 1], bounds[p["seg"] - 1][1] - bounds[p["seg"] - 1][0]) \
+            if p["name"].endswith("-in") else None
+        rend.render(p, seg, bounds[p["seg"]][0], blend)
+        n = p["f1"] - p["f0"]
+        print(f"  {p['name']:<12} {n / fps:5.1f}s  ({n / max(time.time() - t0, 1e-3):.0f} fps)", file=sys.stderr)
+    changed = {p["name"] for p in todo if not p["name"].endswith("-in")}
 
-    timeline = {"duration": round(dur, 3), "size": [W, H], "segments": [
+    print("Joining...")
+    files = [rend.dir / f"{p['name']}.mp4" for p in parts]
+    if vf:  # burned-in captions need one more encode over the joined picture
+        joined = rdir / ".cache" / f"{name}-joined.mp4"
+        concat(files, joined)
+        src, venc = ["-i", str(joined)], [*vf, *enc]
+    else:
+        lst = rdir / ".cache" / f"{name}-parts.txt"
+        lst.write_text("".join(f"file '{f.resolve().as_posix()}'\n" for f in files), encoding="utf-8")
+        src, venc = ["-f", "concat", "-safe", "0", "-i", str(lst)], ["-c:v", "copy"]
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *src, "-i", str(snd), *venc, "-c:a", "copy",
+                    "-map", "0:v", "-map", "1:a", "-shortest", "-movflags", "+faststart", str(out)], check=True)
+
+    if a.draft:
+        print("Scene clips...")
+        (rdir / "scenes").mkdir(exist_ok=True)
+        for i, seg in enumerate(segs):
+            key = seg_key(seg)
+            clip = rdir / "scenes" / f"{key}.mp4"
+            vid = rdir / ".cache" / f"scene-{key}.mp4"
+            concat([rend.dir / f"{p['name']}.mp4" for p in parts if p["seg"] == i], vid)
+            f0, f1 = bounds[i]
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(vid), "-ss", f"{f0 / fps:.3f}",
+                            "-t", f"{(f1 - f0) / fps:.3f}", "-i", str(snd), "-c:v", "copy", "-c:a", "aac",
+                            "-b:a", "160k", "-map", "0:v", "-map", "1:a", "-shortest", "-movflags", "+faststart",
+                            str(clip)], check=True)
+
+    hist_file = rdir / ".cache" / "history.json"
+    hist = read_json(hist_file) if hist_file.exists() else {}
+    if a.draft:
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+        news = [seg_key(s) for s, sig in zip(segs, sigs) if hist.get(seg_key(s), {}).get("sig") != sig]
+        for s, sig in zip(segs, sigs):
+            if seg_key(s) in news:
+                hist[seg_key(s)] = {"sig": sig, "changed": stamp}
+        if news:
+            hist["_last_change"] = stamp
+        write_json(hist_file, hist)
+    timeline = {"duration": round(dur, 3), "size": [W, H], "built": time.strftime("%Y-%m-%dT%H:%M:%S"), "segments": [
         {k: v for k, v in s.items() if k in ("kind", "id", "title", "chapter", "mode", "start", "dur")} |
-        ({"steps": [{"key": st["key"], "at": round(s["start"] + st["t_start"], 2), "say": st["st"].get("say", "")}
-                    for st in s["steps"]]} if s["kind"] == "scene" else {}) for s in tl["segments"]]}
-    write_json(rdir / "timeline.json", timeline)
-    page = storyboard(proj, shot, tl, out, thumbs=want_thumbs)
+        {"key": seg_key(s), "sig": sig, "changed": hist.get(seg_key(s), {}).get("changed"),
+         "clip": f"scenes/{seg_key(s)}.mp4"} |
+        ({"steps": [{"key": st["key"], "at": round(s["start"] + st["t_start"], 2), "t": round(st["t_start"], 2),
+                     "say": st["st"].get("say", "")} for st in s["steps"]]} if s["kind"] == "scene" else {})
+        for s, sig in zip(segs, sigs)]}
+    timeline["last_change"] = hist.get("_last_change")
+    page = None
+    if a.draft or not (rdir / "timeline.json").exists():
+        write_json(rdir / "timeline.json", timeline)
+    if a.draft:
+        page = storyboard(proj, shot, tl, timeline, out)
     lufs = measure(out)
     print(f"\nDone -> {out}  ({fmt(dur)}, {W}x{H}, {time.time() - started:.0f}s)")
-    print(f"review page -> {page}")
+    if changed:
+        print(f"redrawn: {', '.join(k for k in [seg_key(s) for s in segs] if k in changed)}")
+    if page:
+        print(f"review page -> {page}   (comments + approvals: scripts/review.py {proj.name})")
     print(f"captions -> {srt_file}{' (burned in)' if burn else ''}")
     if not voiced:
         print("-- no narration audio (voice engine 'silent'): loudness not checked")

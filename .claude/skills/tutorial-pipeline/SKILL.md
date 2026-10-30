@@ -53,11 +53,19 @@ tells you what it verified and any compromises it made.
 
 ## GATE 2 — the draft
 
-Give the user `renders/draft.mp4` and `renders/storyboard.html` (open it in a browser: the video
-plus one row per step; click a row to jump). Ask for feedback by time or step key ("s02.1").
-For each comment, follow `pipeline/skills/draft-review`: route it (story → Writer, picture/timing
-→ Director, taste → house style), apply, re-render the draft, and show what changed. Repeat until
-they approve. Log the approval in `notes.md`.
+Start the review page in the background: `py scripts/review.py <name>` (keeps running; it opens
+`http://127.0.0.1:8740/`). Tell the user: each part (title card, every scene, end card) has its own
+clip, a comment box and **Approve**; each step has its own comment; everything saves by itself;
+say "done" in chat when finished. (If the server can't run, `renders/storyboard.html` opened as a
+file works too: they press **Copy feedback** and paste it in chat.)
+
+When they say they're done, read `py scripts/review.py <name> --list` (not review.json itself) and
+follow `pipeline/skills/draft-review` for each open comment: route it (story → Writer,
+picture/timing → Director, taste → house style), apply, re-render the draft, and mark what was
+fixed with `--done` so they see it next to their comment. Only the changed parts are redrawn, so
+tell them which parts to look at again; an approved part that changed shows "changed since you
+approved". Repeat until `--list` says everything is approved, confirm once in chat ("All parts
+approved: render the final?"), and log the approval in `notes.md`.
 
 ## 6–7. Final and delivery
 

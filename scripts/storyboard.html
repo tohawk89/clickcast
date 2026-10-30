@@ -1,0 +1,190 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>__TITLE__</title>
+<style>
+:root{--ink:#1b1640;--brand:#5a46d6;--soft:#ece9ff;--bg:#f4f4f8;--card:#fff;--muted:#6b6880;--line:#e6e4ee;--ok:#1f8a4c;--warn:#b25e00}
+*{box-sizing:border-box} body{font:15px/1.45 system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink)}
+header{position:sticky;top:0;z-index:5;background:var(--ink);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+header h1{font-size:18px;margin:0;flex:1 1 260px} header .sum{opacity:.85;font-size:14px}
+#save{font-size:13px;opacity:.75} #save.err{color:#ffb4a8;opacity:1}
+button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff} button.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+main{max-width:1200px;margin:0 auto;padding:16px} details.full{background:var(--card);border-radius:12px;padding:10px 14px;margin-bottom:16px}
+details.full summary{cursor:pointer;font-weight:600} details.full video{width:100%;max-height:70vh;margin-top:10px;border-radius:8px;background:#000}
+.help{color:var(--muted);font-size:14px;margin:0 0 16px}
+section.seg{background:var(--card);border-radius:12px;margin-bottom:18px;overflow:hidden;border:2px solid transparent}
+section.seg.approved{border-color:#bfe5cd} .top{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;padding:14px}
+.top video{width:100%;border-radius:8px;background:#000;max-height:60vh} h2{font-size:17px;margin:0 0 4px}
+h2 .n{display:inline-block;background:var(--brand);color:#fff;border-radius:6px;padding:0 8px;margin-right:6px}
+.meta small{color:var(--muted)} .badge{display:inline-block;font-size:12px;border-radius:99px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+.badge.new{background:#fff1d6;color:var(--warn)} .badge.okb{background:#dcf3e5;color:var(--ok)} .badge.chg{background:#ffe3dc;color:#a33}
+textarea{width:100%;font:inherit;border:1px solid var(--line);border-radius:8px;padding:8px;resize:vertical;min-height:64px}
+textarea:focus{outline:2px solid var(--brand);border-color:transparent} label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.reply{font-size:13px;color:var(--ok);margin-top:4px} .reply.open{color:var(--warn)} .row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+table{width:100%;border-collapse:collapse} td{border-top:1px solid var(--line);padding:8px 12px;vertical-align:top}
+td.t{white-space:nowrap;color:var(--brand);font-weight:600;cursor:pointer;width:1%} td.t small{display:block;color:var(--muted);font-weight:400}
+td.th{width:1%;cursor:pointer} td.th img{width:200px;max-height:240px;object-fit:contain;border-radius:6px;display:block;background:#eee}
+td.say{min-width:0} td.say code{background:#eee;padding:1px 5px;border-radius:4px;font-size:13px} td.say .x{color:var(--muted);font-size:13px}
+td.c{width:34%} td.c textarea{min-height:40px} tr.has td{background:#fffaf0} tr.done td{background:#f3fbf6}
+.addc{font-size:13px;padding:3px 10px;color:var(--muted)}
+@media (max-width:760px){.top{grid-template-columns:1fr} td.th img{width:110px} td.c{width:auto} tr.step{display:grid;grid-template-columns:auto 1fr}
+ tr.step td{border:0} tr.step td.say,tr.step td.c{grid-column:1/-1} tr.step{border-top:1px solid var(--line)} header{position:static}}
+</style></head><body>
+<header><h1>__TITLE__</h1><span class="sum" id="sum"></span><span id="save"></span><button id="copy">Copy feedback</button></header>
+<main>
+<p class="help">Watch each part, write what to change next to it (the whole part, or one step), and press <b>Approve</b> when a part is right.
+<span id="where"></span></p>
+<details class="full"><summary>Watch the whole draft (__DUR__)</summary><video controls preload="metadata" src="__VIDEO__"></video></details>
+<div id="segs"></div>
+<section class="seg"><div class="top" style="grid-template-columns:1fr"><div class="meta"><h2>Anything else?</h2>
+<label for="c-_general">A comment on the whole video</label><textarea id="c-_general" data-key="_general"></textarea><div class="reply" id="r-_general"></div></div></div></section>
+</main>
+<script>
+const DATA = __DATA__;
+const LS = 'review:' + DATA.project;
+let live = location.protocol.startsWith('http'), review = {items: {}};
+const $ = s => document.querySelector(s);
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v; else if (k.startsWith('on')) e[k] = v; else if (v != null) e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : String(k));
+  return e;
+}
+const fmt = t => Math.floor(t / 60) + ':' + (t % 60).toFixed(1).padStart(4, '0');
+function status(text, err) { const s = $('#save'); s.textContent = text; s.className = err ? 'err' : ''; }
+function item(key) { return review.items[key] || {}; }
+function apply(key, patch) {
+  const it = Object.assign({}, item(key));
+  if ('comment' in patch) {
+    const c = patch.comment.trim();
+    if (!c) { delete it.comment; delete it.status; delete it.reply; }
+    else if (c !== it.comment) { it.comment = c; it.status = 'open'; }
+  }
+  if ('approved' in patch) { if (patch.approved) { it.approved = true; it.sig = patch.sig; } else { delete it.approved; delete it.sig; } }
+  it.at = new Date().toISOString();
+  review.items[key] = it;
+}
+const timers = {};
+function save(key, patch, now) {
+  apply(key, patch);
+  clearTimeout(timers[key]);
+  const send = () => {
+    if (live) fetch('api/review', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({key, ...patch})})
+      .then(r => { if (!r.ok) throw 0; status('Saved ' + new Date().toLocaleTimeString()); })
+      .catch(() => status('Not saved: is review.py still running?', true));
+    else { try { localStorage.setItem(LS, JSON.stringify(review)); } catch (e) {} status('Kept in this browser only. Use Copy feedback.'); }
+  };
+  timers[key] = null;
+  if (now) send(); else { status('Typing…'); timers[key] = setTimeout(() => { timers[key] = null; send(); }, 700); }
+  refresh();
+}
+function replyFor(key) {
+  const it = item(key);
+  if (!it.comment) return '';
+  return it.status === 'done' ? '✓ Fixed' + (it.reply ? ': ' + it.reply : '') : 'Open: waiting for the next draft';
+}
+function refresh() {
+  let ok = 0, open = 0;
+  for (const s of DATA.segments) {
+    const it = item(s.key), sec = document.getElementById('seg-' + s.key);
+    const appr = !!it.approved && it.sig === s.sig, stale = !!it.approved && it.sig !== s.sig;
+    if (appr) ok++;
+    sec.classList.toggle('approved', appr);
+    const b = sec.querySelector('.approve');
+    b.textContent = appr ? '✓ Approved (undo)' : stale ? 'Approve again' : 'Approve ' + (s.kind === 'scene' ? 'scene' : 'card');
+    b.className = 'approve ' + (appr ? 'ok' : 'primary');
+    sec.querySelector('.state').replaceChildren(
+      stale ? el('span', {class: 'badge chg'}, 'changed since you approved') : '',
+      appr ? el('span', {class: 'badge okb'}, 'approved') : '');
+  }
+  document.querySelectorAll('textarea[data-key]').forEach(t => {
+    const it = item(t.dataset.key), r = document.getElementById('r-' + t.dataset.key);
+    if (it.comment && it.status !== 'done') open++;
+    if (r) { r.textContent = replyFor(t.dataset.key); r.className = 'reply' + (it.status === 'open' ? ' open' : ''); }
+    const tr = t.closest('tr');
+    if (tr) { tr.classList.toggle('has', it.status === 'open'); tr.classList.toggle('done', it.status === 'done'); }
+  });
+  const n = DATA.segments.length;
+  $('#sum').textContent = `${ok} of ${n} approved · ${open} open comment${open === 1 ? '' : 's'}` +
+    (ok === n && !open ? ' · ready for the final render: say so in chat' : '');
+}
+function box(key, small) {
+  const t = el('textarea', {id: 'c-' + key, 'data-key': key, placeholder: small ? 'What should change in this step?' : 'What should change in this part?'});
+  t.value = item(key).comment || '';
+  t.oninput = () => save(key, {comment: t.value});
+  t.onblur = () => { if (timers[key]) save(key, {comment: t.value}, true); };
+  return t;
+}
+function build() {
+  const root = $('#segs');
+  for (const s of DATA.segments) {
+    // Clips after the first open with the cross-fade from the part before: start just past it.
+    const video = el('video', {controls: '', preload: 'metadata', src: s.clip + '?v=' + s.sig + (s.start > 0 ? '#t=0.45' : '')});
+    const seek = t => () => { video.currentTime = t + 0.05; video.play(); };
+    const isNew = DATA.last_change && s.changed === DATA.last_change && !DATA.first;
+    const label = s.kind === 'scene' ? s.title || s.key : s.kind === 'title' ? 'Title card' : 'End card';
+    const appr = el('button', {class: 'approve primary', onclick: () => {
+      const it = item(s.key), on = !(it.approved && it.sig === s.sig);
+      save(s.key, on ? {approved: true, sig: s.sig} : {approved: false}, true);
+    }});
+    const meta = el('div', {class: 'meta'},
+      el('h2', {}, s.kind === 'scene' ? el('span', {class: 'n'}, s.n) : '', label,
+        isNew ? el('span', {class: 'badge new'}, 'updated in this draft') : '', el('span', {class: 'state'})),
+      el('small', {}, `${s.key} · ${s.kind === 'scene' ? s.mode + ' · ' : ''}${s.dur.toFixed(1)}s · at ${fmt(s.start)} in the full video`),
+      s.say ? el('p', {}, '“' + s.say + '”') : '',
+      el('label', {for: 'c-' + s.key}, 'Comment on this ' + (s.kind === 'scene' ? 'scene' : 'card')),
+      box(s.key), el('div', {class: 'reply', id: 'r-' + s.key}), el('div', {class: 'row'}, appr));
+    const sec = el('section', {class: 'seg', id: 'seg-' + s.key}, el('div', {class: 'top'}, video, meta));
+    if (s.steps && s.steps.length) {
+      const rows = s.steps.map(st => {
+        const has = item(st.key).comment;
+        const cell = el('td', {class: 'c'});
+        const open = () => { cell.replaceChildren(box(st.key, true), el('div', {class: 'reply', id: 'r-' + st.key})); refresh(); cell.querySelector('textarea').focus(); };
+        if (has) { cell.append(box(st.key, true), el('div', {class: 'reply', id: 'r-' + st.key})); }
+        else cell.append(el('button', {class: 'addc', onclick: open}, '+ comment'));
+        return el('tr', {class: 'step'},
+          el('td', {class: 't', onclick: seek(st.t)}, fmt(st.t), el('small', {}, st.key)),
+          el('td', {class: 'th', onclick: seek(st.t)}, el('img', {src: 'thumbs/' + st.key + '.jpg?v=' + s.sig, alt: '', loading: 'lazy'})),
+          el('td', {class: 'say'}, st.say ? '“' + st.say + '”' : el('span', {class: 'x'}, '(no narration)'),
+            el('div', {class: 'x'}, el('code', {}, st.do), ' ', st.target || '', st.extra ? ' · ' + st.extra : '')),
+          cell);
+      });
+      sec.append(el('table', {}, rows));
+    }
+    root.append(sec);
+  }
+  const g = $('#c-_general'), gk = '_general';
+  g.value = item(gk).comment || '';
+  g.oninput = () => save(gk, {comment: g.value});
+  g.onblur = () => { if (timers[gk]) save(gk, {comment: g.value}, true); };
+}
+function feedbackText() {
+  const lines = [], appr = [];
+  for (const s of DATA.segments) {
+    const it = item(s.key);
+    if (it.approved && it.sig === s.sig) appr.push(s.key);
+    if (it.comment && it.status !== 'done') lines.push(`${s.key}: ${it.comment}`);
+    for (const st of s.steps || []) { const c = item(st.key); if (c.comment && c.status !== 'done') lines.push(`${st.key} (${fmt(st.t)} into ${s.key}): ${c.comment}`); }
+  }
+  if (item('_general').comment && item('_general').status !== 'done') lines.push('General: ' + item('_general').comment);
+  if (appr.length) lines.push('Approved: ' + appr.join(', '));
+  return lines.join('\n') || 'No comments yet.';
+}
+$('#copy').onclick = async () => {
+  const text = feedbackText();
+  try { await navigator.clipboard.writeText(text); status('Feedback copied: paste it in chat'); }
+  catch (e) { prompt('Copy this feedback:', text); }
+};
+async function start() {
+  if (live) {
+    try { const r = await fetch('api/review', {cache: 'no-store'}); if (!r.ok) throw 0; review = await r.json(); review.items = review.items || {}; }
+    catch (e) { live = false; }
+  }
+  if (!live) { try { review = JSON.parse(localStorage.getItem(LS)) || review; } catch (e) {} }
+  $('#where').textContent = live ? 'Comments save automatically.' :
+    'Opened as a file, so comments stay in this browser: press Copy feedback and paste it in chat (or open it with scripts/review.py to save them automatically).';
+  build(); refresh();
+}
+start();
+</script></body></html>

@@ -21,3 +21,4 @@ projects/*/FEEDBACK.md
 *.wav
 *.mp3
 *.m4a
+projects/*/review.json
