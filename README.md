@@ -28,17 +28,38 @@ your brief ─► analyse app ─► write story ─► ✅ you approve ─► f
 
 ## Setup
 
+Run once. It installs what's missing (Python packages, the Chromium browser for filming, the
+~330 MB offline voice model), installs your agent's skills, then checks everything:
+
 ```powershell
 # Windows
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
 ```bash
-# macOS / Linux
+# macOS / Linux  (first: brew install ffmpeg node python)
 bash setup.sh
 ```
 
 Or open the folder in your agent and say: *"Set up this pipeline — follow ONBOARDING.md."*
+
+### Check everything is OK
+
+Any time (after an update, on a new machine, or when something breaks):
+
+```powershell
+# Windows
+.venv\Scripts\python.exe scripts\doctor.py
+```
+
+```bash
+# macOS / Linux
+.venv/bin/python scripts/doctor.py
+```
+
+Each line shows `[ok]` fine, `[!!]` must fix (with the fix to run), or `[--]` optional. Add
+`--quick` to skip the browser and voice test. If something is missing, just run the setup again;
+it's safe to repeat and only downloads what isn't there yet.
 
 ## Usage
 
