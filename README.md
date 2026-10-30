@@ -83,4 +83,4 @@ STYLE.md      your saved taste  ·  style.json  the numbers the scripts use
 
 ## Licence
 
-Add your licence here. Music and SFX keep their own licences, listed in `library/CREDITS.md`.
+[MIT](LICENSE). Music and SFX keep their own licences, listed in `library/CREDITS.md`.
