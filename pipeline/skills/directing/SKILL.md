@@ -15,14 +15,20 @@ The full shotlist format is in `reference.md` next to this file — read it befo
 - One scene per story scene, same ids (`s01`…), `chapter` = the story's chapter name,
   `mode` = the story's look. One step per narration line: `say` = the line **word for word**,
   `do` + `target` = the action. Extra silent steps (`wait`, `scroll`) are fine.
+- A story row that covers several fields ("Fill in your details.") = the narrated step on the
+  first field, then one silent step (no `say`) per remaining field. Don't add narration the story
+  doesn't have.
 - Selectors from the analysis, most stable first (`[data-testid]`, `#id`, `[name]`,
   `role=…`, `text=…`). Never nth-child chains.
 - Sign-in and any preparation the viewer shouldn't watch go in `setup` (not filmed). Credentials
   only as `${DEMO_EMAIL}` / `${DEMO_PASSWORD}` from the project's `.env`; password steps get
   `"secret": true`.
 - Emphasis from the story: `zoom`, `callout`, `spotlight`, `focus` (highlight something other than
-  what's clicked, e.g. the total after saving). House default zooms on typing (style.json
-  `camera.auto_zoom`) — don't add `zoom` to every step; constant zooming is tiring.
+  what's clicked, e.g. the total after saving). House default is **no zoom** (style.json
+  `camera.auto_zoom` = never): the whole page keeps the viewer oriented. Add `zoom` only where the
+  story marks it or a control is too small to read — at most once or twice a scene, never on
+  consecutive form fields. If a zoomed frame cuts off what the step is about, drop the zoom
+  rather than fighting it.
 - A click that should land as the line ends ("…then click **Save**.") gets `"act_at": 0.8`.
 - `intro.say` / `outro.say` from the title/end card narration; `title`, `subtitle`, `outro.title`,
   `outro.text` from the story.
@@ -49,7 +55,8 @@ extract frames at each zoom, callout, chapter label and card
 (`ffmpeg -ss <t> -i renders/draft.mp4 -frames:v 1 -vf scale=960:-1 check.png`; step times are in
 `renders/timeline.json`) and check:
 - the cursor lands on the right control and the click ripple is on it;
-- zoomed views keep the important thing inside the frame; callouts don't cover what they label;
+- zoomed views keep the important thing and enough context inside the frame (otherwise remove the
+  zoom); callouts don't cover what they label;
 - nothing private is on screen (real names, emails, tokens, notifications);
 - the narration matches what's on screen at that moment (open storyboard.html to skim);
 - `build.py` printed `ok loudness` and no `!!` lines (overlapping narration means a line is

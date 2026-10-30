@@ -25,8 +25,8 @@
   "tail": 1.2
  },
  "camera": {
-  "auto_zoom": "type",
-  "zoom": 1.7,
+  "auto_zoom": "never",
+  "zoom": 1.5,
   "max_zoom": 2.2,
   "ease": 0.6
  },

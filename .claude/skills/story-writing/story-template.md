@@ -14,8 +14,9 @@ Starts on: <page / state>. Off camera first: <e.g. signed in as the demo user>
 
 | # | Narration | Action on screen | Emphasis |
 |---|---|---|---|
-| 1 | "<line>" | click **<exact label>** | zoom |
-| 2 | "<line>" | type "<demo value>" into **<field>** | callout "<2–5 words>" |
+| 1 | "<line>" | click **<exact label>** | — |
+| 2 | "Fill in your details." | type "<demo>" into **Name**, "<demo>" into **Email**, "<demo>" into **Phone** | — |
+| 3 | "<only what they could get wrong, e.g. the password rule>" | fill **Password** (secret) | callout "<2–5 words>" |
 
 ## Scene 2 — <chapter name> (`s02`, screenshot)
 …

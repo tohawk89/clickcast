@@ -24,6 +24,11 @@ so it must be both pleasant to read and precise.
 
 - **One line = one on-screen action** (or one thing to look at). The Director films each line as
   one step, timed by how long it takes to say. 5–20 words per line.
+- **Group routine input.** A form of ordinary fields gets one line ("Fill in your name, email and
+  phone number."), not one line per field — the video shows the typing. In the table, put the
+  field actions in that row's Action column (or in rows with an empty Narration, `—`). Add a line
+  only for what the viewer could get wrong: a password rule, a required terms checkbox, a field
+  whose meaning isn't obvious.
 - Say it as you show it: "Click **New invoice**." The action happens about halfway through the
   line, so the verb comes early and the label matches the button exactly as the UI writes it.
 - Second person, present tense, friendly and plain. No "simply/just/easy". Explain *why* only when
@@ -40,10 +45,12 @@ so it must be both pleasant to read and precise.
 
 ## Look
 
-Per scene pick **video** (things move: cursor, typing, menus opening — default) or
-**screenshot** (calm overview, reading a result, a long form you don't need to watch filled).
-Mark what deserves attention: **zoom** (small or important controls, typing), **callout** (a
-2–5 word label next to something), **spotlight** (dim everything else).
+Mix the two looks — pick per scene: **video** (motion teaches: navigating, menus opening, a key
+click) or **screenshot** (calm overview, reading a result, a long form you don't need to watch
+filled). A tutorial that is all one look is usually wrong.
+Mark what deserves attention: **callout** (a 2–5 word label next to something), **spotlight** (dim
+everything else), and **zoom** only when a control is too small to read — at most once or twice a
+scene, never on every field. Showing the whole page is the default.
 
 ## Revising
 
