@@ -1,0 +1,17 @@
+{
+ "source": "pipeline/",
+ "digest": "36f1516d98d5",
+ "agent": "claude",
+ "skills": [
+  "directing",
+  "draft-review",
+  "story-writing",
+  "system-analysis",
+  "tutorial-pipeline"
+ ],
+ "agents": [
+  "director",
+  "system-analyst",
+  "writer"
+ ]
+}

@@ -1,0 +1,84 @@
+{
+ "brand": {
+  "color": "#5A46D6",
+  "accent": "#FFB020",
+  "dark": "#1B1640",
+  "text": "#FFFFFF",
+  "font": "C:/Windows/Fonts/segoeui.ttf",
+  "font_bold": "C:/Windows/Fonts/segoeuib.ttf"
+ },
+ "capture": {
+  "viewport": [
+   1280,
+   720
+  ],
+  "scale": 1.5,
+  "browser": "msedge",
+  "type_delay_ms": 55,
+  "mouse_px_per_sec": 1400,
+  "jpeg_quality": 90
+ },
+ "pacing": {
+  "gap": 0.8,
+  "min_step": 2.0,
+  "act_at": 0.55,
+  "tail": 1.2
+ },
+ "camera": {
+  "auto_zoom": "type",
+  "zoom": 1.7,
+  "max_zoom": 2.2,
+  "ease": 0.6
+ },
+ "highlight": {
+  "enabled": true,
+  "width": 5,
+  "radius": 14,
+  "padding": 10,
+  "fade_in": 0.45,
+  "fade_out": 0.3,
+  "lead": 0.9
+ },
+ "voice": {
+  "engine": "kokoro",
+  "voice": "af_heart",
+  "speed": 0.95
+ },
+ "cards": {
+  "title_sec": 3.5,
+  "end_sec": 3.0,
+  "end_text": "Thanks for watching!",
+  "chapter_sec": 2.6
+ },
+ "captions": {
+  "burn_in": false,
+  "font": "Segoe UI",
+  "size": 18,
+  "bold": true,
+  "color": "#FFFFFF",
+  "outline_color": "#000000",
+  "outline": 1,
+  "margin_v": 30,
+  "max_words": 8
+ },
+ "audio": {
+  "lufs": -16,
+  "music_db": -26,
+  "duck": true
+ },
+ "export": {
+  "fps": 30,
+  "final": [
+   1920,
+   1080
+  ],
+  "draft": [
+   1280,
+   720
+  ],
+  "crf": 18,
+  "preset": "medium",
+  "draft_crf": 28,
+  "draft_preset": "ultrafast"
+ }
+}

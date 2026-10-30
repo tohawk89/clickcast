@@ -1,0 +1,30 @@
+<!doctype html>
+<!-- Demo web app used to test the pipeline end to end (and as the onboarding sample).
+     Serve it with:  py -3 -m http.server 8765 -d examples/demo-app
+     Demo login: demo@acme.test / demo1234 (see examples/demo-app/README.md) -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Acme Billing — Sign in</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="center">
+  <form class="card login" id="login">
+    <div class="logo">◆ Acme Billing</div>
+    <h1>Sign in</h1>
+    <label>Email <input id="email" type="email" autocomplete="off" placeholder="you@company.com"></label>
+    <label>Password <input id="password" type="password" placeholder="••••••••"></label>
+    <p class="error" id="error" hidden>Wrong email or password.</p>
+    <button class="primary" type="submit">Sign in</button>
+  </form>
+  <script>
+    document.getElementById('login').addEventListener('submit', e => {
+      e.preventDefault();
+      const ok = email.value === 'demo@acme.test' && password.value === 'demo1234';
+      if (!ok) { error.hidden = false; return; }
+      sessionStorage.setItem('user', email.value);
+      location.href = 'app.html';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+---
+description: Make a video tutorial of a web app — analyse, write the story (you approve), film, draft (you approve), final
+argument-hint: <project-name> [what the tutorial should teach, app URL, repo path]
+---
+
+The user wants a video tutorial. Arguments: `$ARGUMENTS`
+(first word = project name under `projects/`; the rest = their brief, in their words).
+
+You are the **Producer**. Read `AGENTS.md`, then follow the skill
+`pipeline/skills/tutorial-pipeline/SKILL.md` from Intake to Delivery:
+
+1. Intake — house style, create/load the project, ask the open questions in one go, save them.
+2. System Analyst → `analysis/analysis.md`.
+3. Writer → `story.md`.
+4. **GATE 1**: show the story; film nothing until the user approves it.
+5. Director → `shotlist.json`, narration, filming, `renders/draft.mp4` + `storyboard.html`.
+6. **GATE 2**: the user reviews the draft; apply feedback (`pipeline/skills/draft-review`).
+7. Final render → deliver → ask for feedback and save it.
+
+Run the System Analyst, Writer and Director as sub-agents if your agent supports them
+(`system-analyst`, `writer`, `director`); otherwise play each role yourself from
+`pipeline/agents/<role>.md`.

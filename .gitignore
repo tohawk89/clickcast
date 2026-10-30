@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+
+# secrets: demo logins live in each project's .env
+.env
+*.env
+
+# tutorial projects stay local, except the demo
+projects/*
+!projects/demo-first-invoice/
+projects/*/capture/
+projects/*/voice/*.wav
+projects/*/voice/rec/
+projects/*/renders/
+projects/*/FEEDBACK.md
+
+# media
+*.mp4
+*.mov
+*.webm
+*.wav
+*.mp3
+*.m4a

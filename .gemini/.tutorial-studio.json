@@ -1,0 +1,10 @@
+{
+ "source": "pipeline/",
+ "digest": "36f1516d98d5",
+ "agent": "gemini",
+ "agents": [
+  "director",
+  "system-analyst",
+  "writer"
+ ]
+}

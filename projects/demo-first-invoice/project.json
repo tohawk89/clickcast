@@ -1,0 +1,11 @@
+{
+ "id": "p-d3m0",
+ "name": "demo-first-invoice",
+ "url": "http://localhost:8765",
+ "repo": "examples/demo-app",
+ "start": "py -3 -m http.server 8765 -d examples/demo-app",
+ "audience": "small-business owners new to Acme Billing",
+ "goal": "create and save a first invoice",
+ "created": "2026-10-29",
+ "stage": "draft-review"
+}

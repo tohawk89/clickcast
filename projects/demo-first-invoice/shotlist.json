@@ -1,0 +1,44 @@
+{
+ "title": "Create your first invoice",
+ "subtitle": "Acme Billing in under two minutes",
+ "kicker": "TUTORIAL",
+ "intro": {"say": "In this short tutorial, you'll create and save your first invoice in Acme Billing."},
+ "setup": [],
+ "scenes": [
+  {
+   "id": "s01",
+   "title": "Sign in",
+   "chapter": "Sign in",
+   "mode": "video",
+   "steps": [
+    {"say": "Start on the sign in page and enter your work email.", "do": "type", "target": "#email", "text": "${DEMO_EMAIL}"},
+    {"say": "Then type your password.", "do": "type", "target": "#password", "text": "${DEMO_PASSWORD}", "secret": true},
+    {"say": "Click Sign in.", "do": "click", "target": "button:has-text(\"Sign in\")"}
+   ]
+  },
+  {
+   "id": "s02",
+   "title": "Fill in the invoice",
+   "chapter": "Create the invoice",
+   "mode": "video",
+   "steps": [
+    {"say": "Your invoices are listed here. To make a new one, click New invoice.", "do": "click", "target": "#new-invoice", "act_at": 0.75},
+    {"say": "Type the customer's name.", "do": "type", "target": "#customer", "text": "Kopi Corner Sdn Bhd"},
+    {"say": "Describe what you're billing for.", "do": "type", "target": ".item", "text": "Espresso machine service"},
+    {"say": "And enter the price. The total updates as you type.", "do": "type", "target": ".price", "text": "450"},
+    {"say": "Check the total, then save the invoice.", "do": "click", "target": "#save", "focus": "#total", "callout": "Total: RM 450.00", "act_at": 0.8}
+   ]
+  },
+  {
+   "id": "s03",
+   "title": "Check it in the list",
+   "chapter": "Find it again",
+   "mode": "screenshot",
+   "steps": [
+    {"say": "Your new invoice now sits at the bottom of the list, marked as a draft.", "do": "none", "focus": "tbody tr:last-child", "callout": "New draft invoice", "zoom": true},
+    {"say": "And the outstanding amount already includes it.", "do": "none", "focus": ".stat:first-child", "spotlight": true}
+   ]
+  }
+ ],
+ "outro": {"say": "That's it. You've created your first invoice.", "title": "You're all set!", "text": "Next up: sending an invoice to your customer"}
+}

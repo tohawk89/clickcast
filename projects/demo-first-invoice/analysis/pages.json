@@ -1,0 +1,32 @@
+[
+ {
+  "title": "Acme Billing — Sign in",
+  "headings": [
+   "Sign in"
+  ],
+  "buttons": [
+   {
+    "text": "Sign in",
+    "selector": "button:has-text(\"Sign in\")"
+   }
+  ],
+  "links": [],
+  "fields": [
+   {
+    "type": "email",
+    "name": null,
+    "label": "Email",
+    "selector": "#email"
+   },
+   {
+    "type": "password",
+    "name": null,
+    "label": "Password",
+    "selector": "#password"
+   }
+  ],
+  "n": 1,
+  "url": "http://localhost:8765/",
+  "screenshot": "analysis/pages/01.png"
+ }
+]

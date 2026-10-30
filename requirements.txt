@@ -1,0 +1,5 @@
+playwright==1.64.0
+pillow==13.0.0
+kokoro-onnx==0.6.1
+soundfile==0.14.0
+# optional, voice engine "edge" (Malay and many more languages; online):  edge-tts

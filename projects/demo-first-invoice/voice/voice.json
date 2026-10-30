@@ -1,0 +1,74 @@
+{
+ "intro": {
+  "text": "In this short tutorial, you'll create and save your first invoice in Acme Billing.",
+  "file": "voice/intro.wav",
+  "dur": 4.501,
+  "sig": "568251579988"
+ },
+ "s01.0": {
+  "text": "Start on the sign in page and enter your work email.",
+  "file": "voice/s01.0.wav",
+  "dur": 2.923,
+  "sig": "8bde1af01577"
+ },
+ "s01.1": {
+  "text": "Then type your password.",
+  "file": "voice/s01.1.wav",
+  "dur": 1.387,
+  "sig": "e660a25027d3"
+ },
+ "s01.2": {
+  "text": "Click Sign in.",
+  "file": "voice/s01.2.wav",
+  "dur": 1.003,
+  "sig": "810750a77ad4"
+ },
+ "s02.0": {
+  "text": "Your invoices are listed here. To make a new one, click New invoice.",
+  "file": "voice/s02.0.wav",
+  "dur": 3.904,
+  "sig": "d9d39b04aff2"
+ },
+ "s02.1": {
+  "text": "Type the customer's name.",
+  "file": "voice/s02.1.wav",
+  "dur": 1.429,
+  "sig": "f991b846af1e"
+ },
+ "s02.2": {
+  "text": "Describe what you're billing for.",
+  "file": "voice/s02.2.wav",
+  "dur": 1.728,
+  "sig": "735fe1011089"
+ },
+ "s02.3": {
+  "text": "And enter the price. The total updates as you type.",
+  "file": "voice/s02.3.wav",
+  "dur": 3.008,
+  "sig": "d77cf29c57e2"
+ },
+ "s02.4": {
+  "text": "Check the total, then save the invoice.",
+  "file": "voice/s02.4.wav",
+  "dur": 2.261,
+  "sig": "c342bf675c55"
+ },
+ "s03.0": {
+  "text": "Your new invoice now sits at the bottom of the list, marked as a draft.",
+  "file": "voice/s03.0.wav",
+  "dur": 3.947,
+  "sig": "a17090404fc4"
+ },
+ "s03.1": {
+  "text": "And the outstanding amount already includes it.",
+  "file": "voice/s03.1.wav",
+  "dur": 2.325,
+  "sig": "3036edc7a41f"
+ },
+ "outro": {
+  "text": "That's it. You've created your first invoice.",
+  "file": "voice/outro.wav",
+  "dur": 2.197,
+  "sig": "fb85b6a872be"
+ }
+}
